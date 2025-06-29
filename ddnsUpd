@@ -5,7 +5,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Copyright(c) 2023 Gary Buhrmaster <gary.buhrmaster@gmail.com>
+# Copyright(c) 2025 Gary Buhrmaster <gary.buhrmaster@gmail.com>
 #
 
 import socket
@@ -61,41 +61,44 @@ def urlopenANY(*pargs, **kwargs):
 #
 # Obtain the IP address for the hostname via DNS
 #
-def getDNSIPv4(hostname):
+def getDNSIPv4(hostname, verbose=False, debug=False):
+    # pylint: disable=W0613
     try:
         ipaddr = ipaddress.ip_address(socket.getaddrinfo(hostname, None, socket.AF_INET)[0][4][0])
         if ipaddr.version == 4:
-            if args.debug:
+            if debug:
                 print('DNS IPv4 address is {}'.format(ipaddr.compressed))
             return ipaddr.compressed
-        if args.debug:
+        if debug:
             print('DNS IPv4 address was not valid')
-        return None 
+        return None
     except (OSError, ValueError, TypeError, IndexError):
-        if args.debug:
+        if debug:
             print('DNS IPv4 could not be determined')
         return None
 
-def getDNSIPv6(hostname):
+def getDNSIPv6(hostname, verbose=False, debug=False):
+    # pylint: disable=W0613
     try:
         ipaddr = ipaddress.ip_address(socket.getaddrinfo(hostname, None, socket.AF_INET6)[0][4][0])
         if ipaddr.version == 6:
-            if args.debug:
+            if debug:
                 print('DNS IPv6 address is {}'.format(ipaddr.compressed))
             return ipaddr.compressed
-        if args.debug:
+        if debug:
             print('DNS IPv6 address was not valid')
         return None
     except (OSError, ValueError, TypeError, IndexError):
-        if args.debug:
+        if debug:
             print('DNS IPv6 could not be determined')
         return None
 
 #
 # Determine local ip address
 #
-def getLocalIPv4():
-    if args.debug:
+def getLocalIPv4(verbose=False, debug=False):
+    # pylint: disable=W0613
+    if debug:
         print('determining local IPv4 address by opening a local socket')
     ip = None
     try:
@@ -106,27 +109,28 @@ def getLocalIPv4():
         ip = s.getsockname()[0]
         try:
             if ipaddress.ip_address(ip).version != 4:
-                if args.debug:
+                if debug:
                     print('  returned ip adddress {} is not a valid IPv4 address'.format(ip))
                     ip = None
             else:
                 ip = ipaddress.ip_address(ip).compressed
         except ValueError:
-            if args.debug:
+            if debug:
                 print('  returned ip address {} is not a valid IP address'.format(ip))
                 ip = None
     except (OSError, ValueError, TypeError, IndexError):
-        if args.debug:
+        if debug:
             print('  exception on socket operation')
         ip = None
     finally:
         s.close()
-    if args.debug:
+    if debug:
         print('  determined local IPv4 address to be {}'.format(ip))
     return ip
 
-def getLocalIPv6():
-    if args.debug:
+def getLocalIPv6(verbose=False, debug=False):
+    # pylint: disable=W0613
+    if debug:
         print('determining local IPv6 address by opening a local socket')
     ip = None
     try:
@@ -137,7 +141,7 @@ def getLocalIPv6():
             try:
                 s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_ADDR_PREFERENCES, socket.IPV6_PREFER_SRC_PUBLIC)
             except OSError:
-                if args.debug:
+                if debug:
                     print('  exception trying to set socket option')
 
         # doesn't even have to be reachable
@@ -146,29 +150,30 @@ def getLocalIPv6():
         ip = s.getsockname()[0]
         try:
             if ipaddress.ip_address(ip).version != 6:
-                if args.debug:
+                if debug:
                     print('  returned ip adddress {} is not a valid IPv6 address'.format(ip))
                     ip = None
             else:
                 ip = ipaddress.ip_address(ip).compressed
         except ValueError:
-            if args.debug:
+            if debug:
                 print('  returned ip address {} is not a valid IP address'.format(ip))
                 ip = None
     except (OSError, ValueError, TypeError, IndexError):
-        if args.debug:
+        if debug:
             print('  exception on socket operation')
         ip = None
     finally:
         s.close()
-    if args.debug:
+    if debug:
         print('  determined local IPv6 address to be {}'.format(ip))
     return ip
 
 #
 # Determine external ip address from external sources
 #
-def getRemoteExternalIPv4():
+def getRemoteExternalIPv4(verbose=False, debug=False):
+    # pylint: disable=W0613
     externalProviders = [
                           'https://ipv4.nsupdate.info/myip',
                           'https://api.ipify.org',
@@ -179,38 +184,39 @@ def getRemoteExternalIPv4():
                         ]
     random.shuffle(externalProviders)
     for provider in externalProviders:
-        if args.debug:
+        if debug:
             print('trying to determine external IPv4 address from {}'.format(provider))
         try:
             request = urllib.request.Request(provider, method='GET')
             request.add_header = ('User-Agent', 'Python-urllib/3')
             response = urlopenIPv4(request, timeout=20)
             if (response.status < 200) or (response.status > 299):
-                if args.debug:
+                if debug:
                     print('  failed to get response')
                 continue
             ip = response.read().decode("utf-8").strip()
             if ip:
                 try:
                     if ipaddress.ip_address(ip).version != 4:
-                        if args.debug:
+                        if debug:
                             print('  returned ip adddress {} is not a valid IPv4 address'.format(ip))
                         continue
                 except ValueError:
-                    if args.debug:
+                    if debug:
                         print('  returned ip address {} is not a valid IP address'.format(ip))
                     continue
-                if args.debug:
+                if debug:
                     print('  determined ip address is {}'.format(ip))
                 return ip
-            if args.debug:
+            if debug:
                 print('  no ip address returned')
         except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError):
-            if args.debug:
+            if debug:
                 print('  exception occurred')
     return None
 
-def getRemoteExternalIPv6():
+def getRemoteExternalIPv6(verbose=False, debug=False):
+    # pylint: disable=W0613
     externalProviders = [
                           'https://ipv6.nsupdate.info/myip',
                           'https://api6.ipify.org',
@@ -221,34 +227,34 @@ def getRemoteExternalIPv6():
                         ]
     random.shuffle(externalProviders)
     for provider in externalProviders:
-        if args.debug:
+        if debug:
             print('trying to determine external IPv6 address from {}'.format(provider))
         try:
             request = urllib.request.Request(provider, method='GET')
             request.add_header = ('User-Agent', 'Python-urllib/3')
             response = urlopenIPv6(request, timeout=20)
             if (response.status < 200) or (response.status > 299):
-                if args.debug:
+                if debug:
                     print('  failed to get response')
                 continue
             ip = response.read().decode("utf-8").strip()
             if ip:
                 try:
                     if ipaddress.ip_address(ip).version != 6:
-                        if args.debug:
+                        if debug:
                             print('  returned ip adddress {} is not a valid IPv6 address'.format(ip))
                         continue
                 except ValueError:
-                    if args.debug:
+                    if debug:
                         print('  returned ip address {} is not a valid IP address'.format(ip))
                     continue
-                if args.debug:
+                if debug:
                     print('  determined ip address is {}'.format(ip))
                 return ip
-            if args.debug:
+            if debug:
                 print('  no ip address returned')
         except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError):
-            if args.debug:
+            if debug:
                 print('  exception occurred')
     return None
 
@@ -256,10 +262,10 @@ def getRemoteExternalIPv6():
 # The "defacto" standard ddns update method (dyn was an early popular ddns
 # provider, and many/most providers have followed their update method)
 #
-def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, transport='ANY', method='GET', extradata={}):
+def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, transport='ANY', method='GET', verbose=False, debug=False, extradata={}):
     # pylint: disable=W0102
 
-    if args.debug:
+    if debug:
         print('dynUpdate called with:')
         print('  url:          {}'.format(url))
         print('  username:     {}'.format(username))
@@ -316,7 +322,7 @@ def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, 
             response = urlopenANY(request)
     except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
         print('exception occured when attempting update')
-        if args.debug:
+        if debug:
             print(e)
         return 1
     finally:
@@ -326,28 +332,28 @@ def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, 
     if (response.status < 200) or (response.status > 299):
         print('Update failed with response status {}'.format(response.status))
         return 1
+
+    txt = response.read().decode('utf-8')
+    if txt.startswith(('good ')):
+        if verbose or debug:
+            print('Update successful to IP address {}'.format(myip))
+    elif txt.startswith(('nochg ')):
+        if verbose or debug:
+            print('No update required to set IP address {}'.format(myip))
     else:
-        txt = response.read().decode('utf-8')
-        if txt.startswith(('good ')):
-            if args.verbose or args.debug:
-                print('Update successful to IP address {}'.format(myip))
-        elif txt.startswith(('nochg ')):
-            if args.verbose or args.debug:
-                print('No update required to set IP address {}'.format(myip))
-        else:
-            print('Failed to set host {} IP address to {}'.format(hostname, myip))
-            print(txt)
-            return 1
+        print('Failed to set host {} IP address to {}'.format(hostname, myip))
+        print(txt)
+        return 1
 
     return 0
 
 #
 # cloudflate dns update
 #
-def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, extradata={}):
-    # pylint: disable=W0102
+def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, verbose=False, debug=False, extradata={}):
+    # pylint: disable=W0102 disable=W0613
 
-    if args.debug:
+    if debug:
         print('cloudflareUpdate called with:')
         print('  username:     {}'.format(username))
         print('  password:     {}'.format(password))
@@ -394,21 +400,21 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
     for i in range(0, len(fragments)):
         zonename = '.'.join(fragments[i:])
         querydata = {'name': zonename}
-        if args.debug:
+        if debug:
             print('Querying for zone ' + zonename)
         request = urllib.request.Request(url + '/zones?' + urllib.parse.urlencode(querydata), headers=headers, method='GET')
         try:
             response = urlopenANY(request)
         except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
             print('Exception occured when attempting to determine zone id')
-            if args.debug:
+            if debug:
                 print(e)
             return 1
         # Handle response
         if (response.status < 200) or (response.status > 299):
             print('Error while trying to get zone id for domain {}, response status: {}'.format(zonename, response.status))
         txt = response.read().decode('utf-8')
-        if args.debug:
+        if debug:
             print(txt)
         try:
             cfreply = json.loads(txt)
@@ -432,7 +438,7 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
     if zoneid is None:
         print('The request to get the zone id did not return a value')
         return 1
-    if args.debug:
+    if debug:
         print('the zone id is: {}'.format(zoneid))
 
     # Find the dns record id
@@ -442,15 +448,15 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
         response = urlopenANY(request)
     except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
         print('Exception occured when attempting to determine record id')
-        if args.debug:
-            print(e) 
+        if debug:
+            print(e)
         return 1
     # Handle response
     if (response.status < 200) or (response.status > 299):
         print('Error while trying to get record id, response status: {}'.format(response.status))
         return 1
     txt = response.read().decode('utf-8')
-    if args.debug:
+    if debug:
         print(txt)
     try:
         cfreply = json.loads(txt)
@@ -472,7 +478,7 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
     if recordid is None:
         print('The request to get the record id did not return a value')
         return 1
-    if args.debug:
+    if debug:
         print('the record id is: {}'.format(recordid))
 
     # Update the record
@@ -483,7 +489,7 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
         response = urlopenANY(request)
     except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
         print('Exception occured when attempting to update ip address')
-        if args.debug:
+        if debug:
             print(e)
         return 1
     # Handle response
@@ -491,7 +497,7 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
         print('Error while trying to update ip address: {}'.format(response.status))
         return 1
     txt = response.read().decode('utf-8')
-    if args.debug:
+    if debug:
         print(txt)
     try:
         cfreply = json.loads(txt)
@@ -515,11 +521,11 @@ if __name__ == '__main__':
                         help='The API type')
     parser.add_argument('--dyn-api-url',
                         action='store', type=str, required=False, dest='apiurl',
-                        help='The url to use if the api type is dyn') 
+                        help='The url to use if the api type is dyn')
     parser.add_argument('--hostname', '--fqdn',
                         action='store', type=str, required=True,
                         help='The hostname to update')
-    parser.add_argument('--username', '--credentials', '--api-key-id', 
+    parser.add_argument('--username', '--credentials', '--api-key-id',
                         action='store', type=str, required=True,
                         help='The username for the update')
     parser.add_argument('--password', '--credentials-password', '--api-key-secret',
@@ -583,17 +589,21 @@ if __name__ == '__main__':
         UpdateIPv6 = 0
 
     if UpdateIPv4 > 0:
-        IPv4DNS = getDNSIPv4(args.hostname)
+        IPv4DNS = getDNSIPv4(args.hostname, verbose=args.verbose, debug=args.debug)
+    else:
+        IPv4DNS = None
 
     if UpdateIPv6 > 0:
-        IPv6DNS = getDNSIPv6(args.hostname)
+        IPv6DNS = getDNSIPv6(args.hostname, verbose=args.verbose, debug=args.debug)
+    else:
+        IPv6DNS = None
 
     if UpdateIPv4:
         if (args.providerip) and (args.api in ('dyn', 'he')):
             if args.verbose or args.debug:
                 print('IPv4 address will be determined by dynamic dns provider')
         elif args.localip:
-            IPv4 = getLocalIPv4()
+            IPv4 = getLocalIPv4(verbose=args.verbose, debug=args.debug)
             if IPv4 is None:
                 UpdateIPv4 = 0
                 print('Unable to determine local IPv4 address')
@@ -613,7 +623,7 @@ if __name__ == '__main__':
                     if args.verbose or args.debug:
                         print('Local IPv4 address is different than DNS, will be updated')
         else:
-            IPv4 = getRemoteExternalIPv4()
+            IPv4 = getRemoteExternalIPv4(verbose=args.verbose, debug=args.debug)
             if IPv4 is None:
                 UpdateIPv4 = 0
                 print('Unable to determine external IPv4 address')
@@ -638,7 +648,7 @@ if __name__ == '__main__':
             if args.verbose or args.debug:
                 print('IPv6 address will be determined by dynamic dns provider')
         elif args.localip:
-            IPv6 = getLocalIPv6()
+            IPv6 = getLocalIPv6(verbose=args.verbose, debug=args.debug)
             if IPv6 is None:
                 UpdateIPv6 = 0
                 print('Unable to determine local IPv6 address')
@@ -658,7 +668,7 @@ if __name__ == '__main__':
                     if args.verbose or args.debug:
                         print('Local IPv6 address is different than DNS, will be updated')
         else:
-            IPv6 = getRemoteExternalIPv6()
+            IPv6 = getRemoteExternalIPv6(verbose=args.verbose, debug=args.debug)
             if IPv6 is None:
                 UpdateIPv6 = 0
                 print('Unable to determine remote IPv6 address')
@@ -751,19 +761,19 @@ if __name__ == '__main__':
         rc = 0
 
         if UpdateIP:
-            rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IP)
+            rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IP, verbose=args.verbose, debug=args.debug)
 
         if UpdateIPv4:
             if IPv4:
-                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IPv4)
+                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IPv4, verbose=args.verbose, debug=args.debug)
             else:
-                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, transport='IPv4')
+                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, transport='IPv4', verbose=args.verbose, debug=args.debug)
 
         if UpdateIPv6:
             if IPv6:
-                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IPv6)
+                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IPv6, verbose=args.verbose, debug=args.debug)
             else:
-                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, transport='IPv6')
+                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, transport='IPv6', verbose=args.verbose, debug=args.debug)
 
         if rc > 0:
             ReturnCode = 1
@@ -773,13 +783,13 @@ if __name__ == '__main__':
         rc = 0
 
         if UpdateIP:
-            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IP)
+            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IP, verbose=args.verbose, debug=args.debug)
 
         if UpdateIPv4:
-            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IPv4)
+            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IPv4, verbose=args.verbose, debug=args.debug)
 
         if UpdateIPv6:
-            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IPv6)
+            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IPv6, verbose=args.verbose, debug=args.debug)
 
         if rc > 0:
             ReturnCode = 1
