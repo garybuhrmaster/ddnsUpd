@@ -746,11 +746,9 @@ if __name__ == '__main__':
 
         else:
 
-            print('Internal error - supported api is unsupported')
+            print('Internal error - unsupported API: {}'.format(args.api))
             ReturnCode = 1
-            UpdateIP = 0
-            UpdateIPv4 = 0
-            UpdateIPv6 = 0
+            sys.exit(ReturnCode)
 
         rc = 0
 
@@ -790,7 +788,7 @@ if __name__ == '__main__':
 
     else:
 
-        print('Unsupported API')
+        print('Unsupported API: {}'.format(args.api))
         ReturnCode = 1
 
     sys.exit(ReturnCode)
