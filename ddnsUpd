@@ -174,7 +174,9 @@ def getRemoteExternalIPv4():
     externalProviders = [
                           'https://ipv4.nsupdate.info/myip',
                           'https://api.ipify.org',
-                          'https://checkip.dns.he.net',
+                          'https://ifconfig.me/ip',
+                          'https://ifconfig.co/ip',
+                          'https://ipinfo.io/ip',
                           'https://ipv4.icanhazip.com'
                         ]
     random.shuffle(externalProviders)
@@ -214,7 +216,9 @@ def getRemoteExternalIPv6():
     externalProviders = [
                           'https://ipv6.nsupdate.info/myip',
                           'https://api6.ipify.org',
-                          'https://checkip.dns.he.net',
+                          'https://ifconfig.me/ip',
+                          'https://ifconfig.co/ip',
+                          'https://v6.ipinfo.io/ip',
                           'https://ipv6.icanhazip.com'
                         ]
     random.shuffle(externalProviders)
