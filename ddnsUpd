@@ -173,9 +173,9 @@ def getLocalIPv6():
 #
 def getRemoteExternalIPv4():
     externalProviders = [
-                          'https://domains.google.com/checkip',
                           'https://ipv4.nsupdate.info/myip',
                           'https://api.ipify.org',
+                          'https://checkip.dns.he.net',
                           'https://ipv4.icanhazip.com'
                         ]
     random.shuffle(externalProviders)
@@ -213,9 +213,9 @@ def getRemoteExternalIPv4():
 
 def getRemoteExternalIPv6():
     externalProviders = [
-                          'https://domains.google.com/checkip',
                           'https://ipv6.nsupdate.info/myip',
                           'https://api6.ipify.org',
+                          'https://checkip.dns.he.net',
                           'https://ipv6.icanhazip.com'
                         ]
     random.shuffle(externalProviders)
@@ -516,7 +516,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--api',
                         action='store', type=str, required=True,
-                        choices=['dyn', 'google', 'he', 'cloudflare'],
+                        choices=['dyn', 'he', 'cloudflare'],
                         help='The API type')
     parser.add_argument('--dyn-api-url',
                         action='store', type=str, required=False, dest='apiurl',
@@ -590,19 +590,8 @@ if __name__ == '__main__':
     if UpdateIPv6 > 0:
         IPv6DNS = getDNSIPv6(args.hostname)
 
-    #
-    # Google has a "feature", in that it only supports either
-    # an IPv4 or an IPv6 address, for DDNS not both.  So we
-    # need to remove the IPv6 address update request if both
-    # are requested (the last update wins, so only one).
-    #
-    if UpdateIPv4 and UpdateIPv6 and (args.api == 'google'):
-        print('Google dynamic DNS only supports either an IPv4 or an IPv6 address, not both.')
-        print('The IPv6 address update request has been removed from the update request.')
-        UpdateIPv6 = 0
-
     if UpdateIPv4:
-        if (args.providerip) and (args.api in ('dyn', 'google', 'he')):
+        if (args.providerip) and (args.api in ('dyn', 'he')):
             if args.verbose or args.debug:
                 print('IPv4 address will be determined by dynamic dns provider')
         elif args.localip:
@@ -647,7 +636,7 @@ if __name__ == '__main__':
                         print('External IPv4 address is different than DNS, will be updated')
 
     if UpdateIPv6:
-        if (args.providerip) and (args.api in ('dyn', 'google', 'he')):
+        if (args.providerip) and (args.api in ('dyn', 'he')):
             if args.verbose or args.debug:
                 print('IPv6 address will be determined by dynamic dns provider')
         elif args.localip:
@@ -738,7 +727,7 @@ if __name__ == '__main__':
     # providers also support GET, so we use GET
     #
 
-    if args.api in ('dyn', 'google', 'he'):
+    if args.api in ('dyn', 'he'):
 
         if args.api == 'dyn':
 
@@ -748,12 +737,6 @@ if __name__ == '__main__':
 
             if args.apiurl:
                 updateURL = args.apiurl
-
-        elif args.api == 'google':
-
-            # https://username:password@domains.google.com/nic/update?hostname=subdomain.yourdomain.com&myip=1.2.3.4
-
-            updateURL = 'https://domains.google.com/nic/update'
 
         elif args.api == 'he':
 
