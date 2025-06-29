@@ -29,36 +29,34 @@ if not hasattr(socket, "IPV6_PREFER_SRC_PUBLIC"):
 #
 # Wrappers to force urlopen to use specified transport
 #
-def urlopenIPv6(*args, **kwargs):
+def urlopenIPv6(*pargs, **kwargs):
     original_socket_getaddrinfo = socket.getaddrinfo
     def getaddrinfoIPv6(host, port, family=0, type=0, proto=0, flags=0):
+        # pylint: disable=W0622 disable=W0613
         return original_socket_getaddrinfo(host, port, family=socket.AF_INET6, type=type, proto=proto, flags=flags)
     socket.getaddrinfo = getaddrinfoIPv6
     r = None
     try:
-        r = urllib.request.urlopen(*args, **kwargs)
-    except:
-        raise
+        r = urllib.request.urlopen(*pargs, **kwargs)
     finally:
         socket.getaddrinfo = original_socket_getaddrinfo
     return r
 
-def urlopenIPv4(*args, **kwargs):
+def urlopenIPv4(*pargs, **kwargs):
     original_socket_getaddrinfo = socket.getaddrinfo
     def getaddrinfoIPv4(host, port, family=0, type=0, proto=0, flags=0):
+        # pylint: disable=W0622 disable=W0613
         return original_socket_getaddrinfo(host, port, family=socket.AF_INET, type=type, proto=proto, flags=flags)
     socket.getaddrinfo = getaddrinfoIPv4
     r = None
     try:
-        r = urllib.request.urlopen(*args, **kwargs)
-    except:
-        raise
+        r = urllib.request.urlopen(*pargs, **kwargs)
     finally:
         socket.getaddrinfo = original_socket_getaddrinfo
     return r
 
-def urlopenANY(*args, **kwargs):
-    return urllib.request.urlopen(*args, **kwargs)
+def urlopenANY(*pargs, **kwargs):
+    return urllib.request.urlopen(*pargs, **kwargs)
 
 #
 # Obtain the IP address for the hostname via DNS
@@ -259,6 +257,7 @@ def getRemoteExternalIPv6():
 # provider, and many/most providers have followed their update method)
 #
 def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, transport='ANY', method='GET', extradata={}):
+    # pylint: disable=W0102
 
     if args.debug:
         print('dynUpdate called with:')
@@ -320,8 +319,6 @@ def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, 
         if args.debug:
             print(e)
         return 1
-    except:
-        raise
     finally:
         urllib.request.OpenerDirector = original_openerDirector
 
@@ -348,6 +345,7 @@ def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, 
 # cloudflate dns update
 #
 def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, extradata={}):
+    # pylint: disable=W0102
 
     if args.debug:
         print('cloudflareUpdate called with:')
@@ -406,8 +404,6 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
             if args.debug:
                 print(e)
             return 1
-        except:
-            raise
         # Handle response
         if (response.status < 200) or (response.status > 299):
             print('Error while trying to get zone id for domain {}, response status: {}'.format(zonename, response.status))
@@ -449,8 +445,6 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
         if args.debug:
             print(e) 
         return 1
-    except:
-        raise
     # Handle response
     if (response.status < 200) or (response.status > 299):
         print('Error while trying to get record id, response status: {}'.format(response.status))
@@ -492,8 +486,6 @@ def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, ext
         if args.debug:
             print(e)
         return 1
-    except:
-        raise
     # Handle response
     if (response.status < 200) or (response.status > 299):
         print('Error while trying to update ip address: {}'.format(response.status))
@@ -573,6 +565,9 @@ if __name__ == '__main__':
     IPv4 = None
     IPv6 = None
     IP = None
+
+    IPv4DNS = None
+    IPv6DNS = None
 
     if args.ipv4:
         UpdateIPv4 += 1
