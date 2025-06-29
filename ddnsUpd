@@ -3,9 +3,9 @@
 #
 # Yet Another DDNS updater
 #
-# License: Apache 2.0
+# SPDX-License-Identifier: Apache-2.0
 #
-# Copyright(c) 2020 Gary Buhrmaster <gary.buhrmaster@gmail.com>
+# Copyright(c) 2023 Gary Buhrmaster <gary.buhrmaster@gmail.com>
 #
 
 import socket
@@ -17,6 +17,7 @@ import urllib.error
 import urllib.parse
 import random
 import ipaddress
+import json
 
 # Not everything is available in Python
 if not hasattr(socket, "IPV6_ADDR_PREFERENCES"):
@@ -75,7 +76,7 @@ def getDNSIPv4(hostname):
         return None 
     except (OSError, ValueError, TypeError, IndexError):
         if args.debug:
-            print('DNS IPv4 address exception')
+            print('DNS IPv4 could not be determined')
         return None
 
 def getDNSIPv6(hostname):
@@ -90,7 +91,7 @@ def getDNSIPv6(hostname):
         return None
     except (OSError, ValueError, TypeError, IndexError):
         if args.debug:
-            print('DNS IPv6 address exception')
+            print('DNS IPv6 could not be determined')
         return None
 
 #
@@ -175,7 +176,6 @@ def getRemoteExternalIPv4():
                           'https://domains.google.com/checkip',
                           'https://ipv4.nsupdate.info/myip',
                           'https://api.ipify.org',
-                          'https://ipv4bot.whatismyipaddress.com',
                           'https://ipv4.icanhazip.com'
                         ]
     random.shuffle(externalProviders)
@@ -216,7 +216,6 @@ def getRemoteExternalIPv6():
                           'https://domains.google.com/checkip',
                           'https://ipv6.nsupdate.info/myip',
                           'https://api6.ipify.org',
-                          'https://ipv6bot.whatismyipaddress.com',
                           'https://ipv6.icanhazip.com'
                         ]
     random.shuffle(externalProviders)
@@ -252,7 +251,264 @@ def getRemoteExternalIPv6():
                 print('  exception occurred')
     return None
 
+#
+# The "defacto" standard ddns update method (dyn was an early popular ddns
+# provider, and many/most providers have followed their update method)
+#
+def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, transport='ANY', method='GET', extradata={}):
 
+    if args.debug:
+        print('dynUpdate called with:')
+        print('  url:          {}'.format(url))
+        print('  username:     {}'.format(username))
+        print('  password:     {}'.format(password))
+        print('  hostname:     {}'.format(hostname))
+        print('  myip:         {}'.format(myip))
+        print('  transport:    {}'.format(transport))
+        print('  method:       {}'.format(method))
+        print('  extradata:    {}'.format(extradata))
+
+    if url is None:
+        print('The dynamic ddns update URL was not specified')
+        return 1
+    if username is None:
+        print('The dynamic ddns username was not specified')
+        return 1
+    if password is None:
+        print('The dynamic ddns password was not specified')
+        return 1
+    if hostname is None:
+        print('The dynamic ddns hostname was not specified')
+        return 1
+    if method not in ('GET', 'POST'):
+        print('The dynamic ddns method is not GET or POST')
+        return 1
+
+    querydata = {'hostname': hostname}
+    if myip is not None:
+        querydata['myip'] = myip
+    querydata.update(extradata)
+
+    data = urllib.parse.urlencode(querydata)
+    headers = {'User-Agent': 'Python-urllib/3'}
+    if method == 'GET':
+        request = urllib.request.Request(url + '?' + data, headers=headers, method='GET')
+    else:
+        request = urllib.request.Request(url, data=data.encode('utf-8'), headers=headers, method='POST')
+
+    # Install opener to support basic authentication
+    passwordManager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+    passwordManager.add_password(None, url, username, password)
+    authHandler = urllib.request.HTTPBasicAuthHandler(passwordManager)
+    opener = urllib.request.build_opener(authHandler)
+    original_openerDirector = urllib.request.OpenerDirector
+    urllib.request.install_opener(opener)
+
+    # Use the required transport for the open
+    try:
+        if transport == 'IPv4':
+            response = urlopenIPv4(request)
+        elif transport == 'IPv6':
+            response = urlopenIPv6(request)
+        else:
+            response = urlopenANY(request)
+    except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
+        print('exception occured when attempting update')
+        if args.debug:
+            print(e)
+        return 1
+    except:
+        raise
+    finally:
+        urllib.request.OpenerDirector = original_openerDirector
+
+    # Handle response
+    if (response.status < 200) or (response.status > 299):
+        print('Update failed with response status {}'.format(response.status))
+        return 1
+    else:
+        txt = response.read().decode('utf-8')
+        if txt.startswith(('good ')):
+            if args.verbose or args.debug:
+                print('Update successful to IP address {}'.format(myip))
+        elif txt.startswith(('nochg ')):
+            if args.verbose or args.debug:
+                print('No update required to set IP address {}'.format(myip))
+        else:
+            print('Failed to set host {} IP address to {}'.format(hostname, myip))
+            print(txt)
+            return 1
+
+    return 0
+
+#
+# cloudflate dns update
+#
+def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, extradata={}):
+
+    if args.debug:
+        print('cloudflareUpdate called with:')
+        print('  username:     {}'.format(username))
+        print('  password:     {}'.format(password))
+        print('  hostname:     {}'.format(hostname))
+        print('  myip:         {}'.format(myip))
+        print('  extradata:    {}'.format(extradata))
+
+    if username is None:
+        print('The dynamic ddns username was not specified')
+        return 1
+    if password is None:
+        print('The dynamic ddns password was not specified')
+        return 1
+    if hostname is None:
+        print('The dynamic ddns hostname was not specified')
+        return 1
+    if myip is None:
+        print('The dynamic ddns ip address was not specified')
+        return 1
+    try:
+        ipaddr = ipaddress.ip_address(myip)
+    except ValueError:
+        print('Specified IP address: {} is invalid'.format(myip))
+        return 1
+    if ipaddr.version == 6:
+        updateType = 'AAAA'
+    elif ipaddr.version == 4:
+        updateType = 'A'
+    else:
+        print('The ip address' + myip + ' is not a valid IPv4 or IPv6 address')
+        return 1
+
+    url = 'https://api.cloudflare.com/client/v4'
+
+    headers = {'User-Agent': 'Python-urllib/3',
+               'Content-Type': 'application/json',
+               'Accept': 'application/json',
+               'Authorization': 'Bearer ' + password}
+
+    # Find the zone id by working backwords from hostname
+    zoneid = None
+    fragments = hostname.split('.')
+    print(len(fragments))
+    for i in range(0, len(fragments)):
+        zonename = '.'.join(fragments[i:])
+        querydata = {'name': zonename}
+        if args.debug:
+            print('Querying for zone ' + zonename)
+        request = urllib.request.Request(url + '/zones?' + urllib.parse.urlencode(querydata), headers=headers, method='GET')
+        try:
+            response = urlopenANY(request)
+        except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
+            print('Exception occured when attempting to determine zone id')
+            if args.debug:
+                print(e)
+            return 1
+        except:
+            raise
+        # Handle response
+        if (response.status < 200) or (response.status > 299):
+            print('Error while trying to get zone id for domain {}, response status: {}'.format(zonename, response.status))
+        txt = response.read().decode('utf-8')
+        if args.debug:
+            print(txt)
+        try:
+            cfreply = json.loads(txt)
+        except json.JSONDecodeError:
+            print('Error while decoding json response text for zone id for domain {}'.format(zonename))
+            continue
+        success = cfreply.get('success', False)
+        if not success:
+            print('The request to get the zone id was not successful for domain {}'.format(zonename))
+            continue
+        cfresults = cfreply.get('result', [])
+        if len(cfresults) > 1:
+            print('The request to get the zone id for domain {} returned multiple results'.format(zonename))
+            continue
+        if len(cfresults) == 0:
+            print('The request to get the zone id for domain {} did not return a result'.format(zonename))
+            continue
+        zoneid = cfresults[0].get('id', None)
+        if zoneid is not None:
+            break
+    if zoneid is None:
+        print('The request to get the zone id did not return a value')
+        return 1
+    if args.debug:
+        print('the zone id is: {}'.format(zoneid))
+
+    # Find the dns record id
+    querydata = {'match': 'all', 'name': hostname, 'type': updateType}
+    request = urllib.request.Request(url + '/zones/' + zoneid + '/dns_records?' + urllib.parse.urlencode(querydata), headers=headers, method='GET')
+    try:
+        response = urlopenANY(request)
+    except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
+        print('Exception occured when attempting to determine record id')
+        if args.debug:
+            print(e) 
+        return 1
+    except:
+        raise
+    # Handle response
+    if (response.status < 200) or (response.status > 299):
+        print('Error while trying to get record id, response status: {}'.format(response.status))
+        return 1
+    txt = response.read().decode('utf-8')
+    if args.debug:
+        print(txt)
+    try:
+        cfreply = json.loads(txt)
+    except json.JSONDecodeError:
+        print('Error while decoding json response text for record id')
+        return 1
+    success = cfreply.get('success', False)
+    if not success:
+        print('The request to get the recored id was not successful')
+        return 1
+    cfresults = cfreply.get('result', [])
+    if len(cfresults) == 0:
+        print('The request to get the record id did not return a result')
+        return 1
+    if len(cfresults) > 1:
+        print('The request to get the record id returned multiple results')
+        return 1
+    recordid = cfresults[0].get('id', None)
+    if recordid is None:
+        print('The request to get the record id did not return a value')
+        return 1
+    if args.debug:
+        print('the record id is: {}'.format(recordid))
+
+    # Update the record
+    patchdata = {'name': hostname, 'type': updateType, 'content': myip}
+    patchdata.update(extradata)
+    request = urllib.request.Request(url + '/zones/' + zoneid + '/dns_records/' + recordid, data=json.dumps(patchdata).encode('utf-8'), headers=headers, method='PATCH')
+    try:
+        response = urlopenANY(request)
+    except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
+        print('Exception occured when attempting to update ip address')
+        if args.debug:
+            print(e)
+        return 1
+    except:
+        raise
+    # Handle response
+    if (response.status < 200) or (response.status > 299):
+        print('Error while trying to update ip address: {}'.format(response.status))
+        return 1
+    txt = response.read().decode('utf-8')
+    if args.debug:
+        print(txt)
+    try:
+        cfreply = json.loads(txt)
+    except json.JSONDecodeError:
+        print('Error while decoding json response text for ip update request')
+        return 1
+    success = cfreply.get('success', False)
+    if not success:
+        print('The request to update the ip address was not successful')
+        return 1
+
+    return 0
 
 
 if __name__ == '__main__':
@@ -260,8 +516,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--api',
                         action='store', type=str, required=True,
-                        choices=['dyn', 'google', 'he'],
-                        help='The API type (currently only he supported)')
+                        choices=['dyn', 'google', 'he', 'cloudflare'],
+                        help='The API type')
     parser.add_argument('--dyn-api-url',
                         action='store', type=str, required=False, dest='apiurl',
                         help='The url to use if the api type is dyn') 
@@ -277,7 +533,7 @@ if __name__ == '__main__':
     ipgroup = parser.add_mutually_exclusive_group(required=False)
     ipgroup.add_argument('--use-ddns-provider-ip', '--use-ddns-provider-IP', '--use-ddns-ip', '--use-ddns-IP',
                         action='store_true', default=False, dest='providerip',
-                        help='Use the external IP address as determined by the dns provider')
+                        help='Use the external IP address as determined by the dns provider if supported')
     ipgroup.add_argument('--use-localip', '--use-localIP', '--use-local-ip', '--use-local-IP',
                         action='store_true', default=False, dest='localip',
                         help='Use the local determined IP rather than the default IP')
@@ -315,9 +571,6 @@ if __name__ == '__main__':
     IPv6 = None
     IP = None
 
-    IPv4DNS = getDNSIPv4(args.hostname)
-    IPv6DNS = getDNSIPv6(args.hostname)
-
     if args.ipv4:
         UpdateIPv4 += 1
         UpdateIPv6 -= 1
@@ -331,10 +584,17 @@ if __name__ == '__main__':
         UpdateIPv4 = 0
         UpdateIPv6 = 0
 
+    if UpdateIPv4 > 0:
+        IPv4DNS = getDNSIPv4(args.hostname)
+
+    if UpdateIPv6 > 0:
+        IPv6DNS = getDNSIPv6(args.hostname)
+
     #
     # Google has a "feature", in that it only supports either
-    # an IPv4 or and IPv6 address, not both.  So we need to
-    # remove the IPv6 address update request if both are requested
+    # an IPv4 or an IPv6 address, for DDNS not both.  So we
+    # need to remove the IPv6 address update request if both
+    # are requested (the last update wins, so only one).
     #
     if UpdateIPv4 and UpdateIPv6 and (args.api == 'google'):
         print('Google dynamic DNS only supports either an IPv4 or an IPv6 address, not both.')
@@ -342,7 +602,7 @@ if __name__ == '__main__':
         UpdateIPv6 = 0
 
     if UpdateIPv4:
-        if args.providerip:
+        if (args.providerip) and (args.api in ('dyn', 'google', 'he')):
             if args.verbose or args.debug:
                 print('IPv4 address will be determined by dynamic dns provider')
         elif args.localip:
@@ -387,7 +647,7 @@ if __name__ == '__main__':
                         print('External IPv4 address is different than DNS, will be updated')
 
     if UpdateIPv6:
-        if args.providerip:
+        if (args.providerip) and (args.api in ('dyn', 'google', 'he')):
             if args.verbose or args.debug:
                 print('IPv6 address will be determined by dynamic dns provider')
         elif args.localip:
@@ -441,7 +701,7 @@ if __name__ == '__main__':
             ReturnCode = 1
         else:
             if args.verbose or args.debug:
-                print('Specified IP address is: {} ',format(IP))
+                print('Specified IP address is: {} '.format(IP))
             if IP in (IPv6DNS, IPv4DNS):
                 if args.force:
                     if args.verbose or args.debug:
@@ -455,7 +715,7 @@ if __name__ == '__main__':
                     print('Specified IP address is different than DNS, will be updated')
 
     #
-    # Scenerios that the API providers must support
+    # Scenerios that the API providers may support
     #
     # * (single) ip address specified
     # * IPv4 and/or IPv6 address derived (either via local or external)
@@ -463,106 +723,8 @@ if __name__ == '__main__':
     #
 
     #
-    # The "defacto" standard ddns update method (dyn was an early popular ddns
-    # provider, and many/most providers have followed their update method)
-    #
-
-    def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, transport='ANY', method='GET', extradata={}):
-        if url is None:
-            print('The dynamic ddns update URL was not specified')
-            ReturnCode = 1
-            return
-        if username is None:
-            print('The dynamic ddns username was not specified')
-            ReturnCode = 1
-            return
-        if password is None:
-            print('The dynamic ddns password was not specified')
-            ReturnCode = 1
-            return
-        if hostname is None:
-            print('The dynamic ddns hostname was not specified')
-            ReturnCode = 1
-            return
-        if method not in ('GET', 'POST'):
-            print('The dynamic ddns method is not GET or POST')
-            ReturnCode = 1
-            return
-
-        if args.debug:
-            print('dynUpdate called with:')
-            print('  url:          {}'.format(url))
-            print('  username:     {}'.format(username))
-            print('  password:     {}'.format(password))
-            print('  hostname:     {}'.format(hostname))
-            print('  myip:         {}'.format(myip))
-            print('  transport:    {}'.format(transport))
-            print('  method:       {}'.format(method))
-            print('  extradata:    {}'.format(extradata))
-
-        querydata = {'hostname': hostname}
-        if myip is not None:
-            querydata['myip'] = myip
-        querydata.update(extradata)
-
-        data = urllib.parse.urlencode(querydata)
-        headers = {'User-Agent': 'Python-urllib/3'}
-        if method == 'GET':
-            request = urllib.request.Request(url + '?' + data, headers=headers, method='GET')
-        else:
-            request = urllib.request.Request(url, data=data.encode('utf-8'), headers=headers, method='POST')
-
-        # Install opener to support basic authentication
-        passwordManager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
-        passwordManager.add_password(None, url, username, password)
-        authHandler = urllib.request.HTTPBasicAuthHandler(passwordManager)
-        opener = urllib.request.build_opener(authHandler)
-        original_openerDirector = urllib.request.OpenerDirector
-        urllib.request.install_opener(opener)
-
-        # Use the required transport for the open
-        try:
-            if transport == 'IPv4':
-                response = urlopenIPv4(request)
-            elif transport == 'IPv6':
-                response = urlopenIPv6(request)
-            else:
-                response = urlopenANY(request)
-        except (IOError, ValueError, OSError, urllib.error.URLError, urllib.error.HTTPError) as e:
-            print('exception occured when attempting update')
-            if args.debug:
-                print(e)
-            ReturnCode = 1
-            return
-        except:
-            raise
-        finally:
-            urllib.request.OpenerDirector = original_openerDirector
-
-        # Handle response
-        if (response.status < 200) or (response.status > 299):
-            print('Update failed with response status {}'.format(response.status))
-            ReturnCode = 1
-            return
-        else:
-            txt = response.read().decode('utf-8')
-            if txt.startswith(('good ')):
-                if args.verbose or args.debug:
-                    print('Update successful to IP address {}'.format(myip))
-            elif txt.startswith(('nochg ')):
-                if args.verbose or args.debug:
-                    print('No update required to set IP address {}'.format(myip))
-            else:
-                print('Failed to set host {} IP address to {}'.format(hostname, myip))
-                print(txt)
-                ReturnCode = 1
-                return
-        return
-
-
-    #
     # For the providers that support the dyn protocol
-    # share the majority of code paths.
+    # they share the majority of code paths.
     #
     # For the dyn protocol, the transport type only
     # matters if the address will be auto-determined.
@@ -607,25 +769,45 @@ if __name__ == '__main__':
             UpdateIPv4 = 0
             UpdateIPv6 = 0
 
+        rc = 0
+
         if UpdateIP:
-            dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IP)
+            rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IP)
 
         if UpdateIPv4:
             if IPv4:
-                dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IPv4)
+                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IPv4)
             else:
-                dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, transport='IPv4')
+                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, transport='IPv4')
 
         if UpdateIPv6:
             if IPv6:
-                dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IPv6)
+                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, myip=IPv6)
             else:
-                dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, transport='IPv6')
+                rc += dynUpdate(url=updateURL, username=args.username, password=args.password, hostname=args.hostname, transport='IPv6')
+
+        if rc > 0:
+            ReturnCode = 1
+
+    elif args.api in ('cloudflare'):
+
+        rc = 0
+
+        if UpdateIP:
+            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IP)
+
+        if UpdateIPv4:
+            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IPv4)
+
+        if UpdateIPv6:
+            rc += cloudflareUpdate(username=args.username, password=args.password, hostname=args.hostname, myip=IPv6)
+
+        if rc > 0:
+            ReturnCode = 1
 
     else:
 
         print('Unsupported API')
         ReturnCode = 1
-
 
     sys.exit(ReturnCode)
