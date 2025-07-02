@@ -1,0 +1,14 @@
+
+API provider notes:
+
+For the dyn API, the username and password
+are your dyn credentials.
+
+For the he API, the username is the hostname,
+and the password would be the dynamic dns
+token in the dns record.
+
+For the cloudflare API the username is not
+used (but must be specified for compatibility),
+and the password should be the API token.
+

@@ -1,0 +1,14 @@
+
+ddns using dyndns to update www.example.com's IPv4 address only (your external IP will be determined by ddnsUpd)
+
+   ddnsUpd --api dyn --hostname www.example.com --username dynuser --password dynpassword --ipv4
+
+ddns using dyndns to update www.example.com's IP addresses letting dyndns determine your external IP address
+
+   ddnsUpd --api dyn --hostname www.example.com --username dynuser --password dynpassword --use-ddns-provider-ip
+
+ddns using the dyn api but another service to update www.example.com's IP addresses
+   (a number of alternative ddns sites use the dyn protocol as their base)
+
+   ddnsUpd --api dyn --dyn-api-url https://other-dynamic-ddns-site.example.com  --hostname www.example.com --username otheruser --password --otherpassword
+
