@@ -348,7 +348,7 @@ def dynUpdate(url=None, username=None, password=None, hostname=None, myip=None, 
     return 0
 
 #
-# cloudflate dns update
+# cloudflare dns update
 #
 def cloudflareUpdate(username=None, password=None, hostname=None, myip=None, verbose=False, debug=False, extradata={}):
     # pylint: disable=W0102 disable=W0613
